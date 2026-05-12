@@ -93,6 +93,23 @@ func TestFortiOSPromptAndContextTransitions(t *testing.T) {
 	}
 }
 
+func TestFortiOSOpenConsoleFlow(t *testing.T) {
+	fd := newFortiTestDevice()
+	addr, cleanup := startFortiTestServer(t, fd)
+	defer cleanup()
+
+	out := interact(t, addr, []string{"enable", "config system console", "set output standard", "end"})
+	if !strings.Contains(out, "FGT (console) #") {
+		t.Fatalf("expected console context prompt, got:\n%s", out)
+	}
+	if strings.Contains(out, "Command fail. Return code -61") {
+		t.Fatalf("expected set output standard to be accepted, got:\n%s", out)
+	}
+	if !strings.Contains(out, "FGT #") {
+		t.Fatalf("expected base prompt after end, got:\n%s", out)
+	}
+}
+
 func TestFortiOSCommandTranscriptMatch(t *testing.T) {
 	fd := newFortiTestDevice()
 	addr, cleanup := startFortiTestServer(t, fd)

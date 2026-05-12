@@ -58,8 +58,12 @@ func fortiGateSession(fd *fakedevices.FakeDevice, sequence []transcript.Sequence
 				break
 			}
 
-			if fortiHandleStatefulCommand(t, strings.TrimSpace(userInput), fd, &contextStack) {
+			terminate, handled := fortiHandleStatefulCommand(t, strings.TrimSpace(userInput), fd, &contextStack)
+			if terminate {
 				break
+			}
+			if handled {
+				continue
 			}
 
 			if sequenceHandled {
@@ -85,44 +89,52 @@ func fortiGateSession(fd *fakedevices.FakeDevice, sequence []transcript.Sequence
 	}
 }
 
-func fortiHandleStatefulCommand(t *term.Terminal, userInput string, fd *fakedevices.FakeDevice, contextStack *[]string) bool {
+func fortiHandleStatefulCommand(t *term.Terminal, userInput string, fd *fakedevices.FakeDevice, contextStack *[]string) (bool, bool) {
 	fields := strings.Fields(userInput)
 	if len(fields) == 0 {
-		return false
+		return false, false
 	}
 
 	switch fields[0] {
 	case "config":
 		if len(fields) < 2 {
 			t.Write([]byte("Command fail. Return code -61\n"))
-			return false
+			return false, true
 		}
 		component := fields[len(fields)-1]
 		*contextStack = append(*contextStack, "("+component+") #")
 		t.SetPrompt(devicePrompt(fd, (*contextStack)[len(*contextStack)-1]))
-		return false
+		return false, true
 	case "edit":
 		if len(fields) < 2 {
 			t.Write([]byte("Command fail. Return code -61\n"))
-			return false
+			return false, true
 		}
 		name := strings.Join(fields[1:], " ")
 		*contextStack = append(*contextStack, "("+name+") #")
 		t.SetPrompt(devicePrompt(fd, (*contextStack)[len(*contextStack)-1]))
-		return false
+		return false, true
 	case "next":
 		if len(*contextStack) > 1 {
 			*contextStack = (*contextStack)[:len(*contextStack)-1]
 		}
 		t.SetPrompt(devicePrompt(fd, (*contextStack)[len(*contextStack)-1]))
-		return false
+		return false, true
 	case "end":
 		*contextStack = []string{fortiRootContext}
 		t.SetPrompt(devicePrompt(fd, fortiRootContext))
-		return false
+		return false, true
+	case "set":
+		if len(fields) >= 3 && strings.EqualFold(fields[1], "output") && strings.EqualFold(fields[2], "standard") {
+			if len(*contextStack) > 0 && (*contextStack)[len(*contextStack)-1] == "(console) #" {
+				return false, true
+			}
+		}
+	case "enable":
+		return false, true
 	case "exit":
-		return true
+		return true, true
 	}
 
-	return false
+	return false, false
 }
